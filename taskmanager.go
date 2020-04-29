@@ -9,8 +9,9 @@ import (
 )
 
 type TasksContext struct {
-	currentTaskFile  string
-	backlogTasksFile string
+	currentTasksFile  *os.File
+	finishedTasksFile *os.File
+	backlogFile       *os.File
 }
 
 type Task struct {
@@ -42,9 +43,12 @@ func main() {
 	}
 
 	tasksContext := TasksContext{
-		currentTaskFile:  tasksFolder + "/current",
-		backlogTasksFile: tasksFolder + "/backlog",
+		currentTasksFile:  getFile(tasksFolder + "/current"),
+		finishedTasksFile: getFile(tasksFolder + "/done"),
+		backlogFile:       getFile(tasksFolder + "/backlog"),
 	}
+
+	loadCurrentTasks(&tasksContext)
 
 	for {
 		processOption(presentOptions(), &tasksContext)
@@ -89,14 +93,8 @@ func processOption(cmd string, ctx *TasksContext) {
 }
 
 func addTask(taskDescription string, ctx *TasksContext) {
-	currentTasksFile, err := os.OpenFile(ctx.currentTaskFile, os.O_CREATE|os.O_RDWR |os.O_APPEND, 0664)
-	if err != nil {
-		fmt.Println("Unable to open " + ctx.currentTaskFile + " :: " + err.Error())
-		os.Exit(-1)
-	}
-
-	if _, err := currentTasksFile.WriteString(taskDescription + "\n"); err != nil {
-		fmt.Printf("Unable to write to %s :: %s\n", currentTasksFile.Name(), err.Error())
+	if _, err := ctx.currentTasksFile.WriteString(taskDescription + "\n"); err != nil {
+		fmt.Printf("Unable to write to %s :: %s\n", ctx.currentTasksFile.Name(), err.Error())
 		os.Exit(-1)
 	}
 
@@ -108,14 +106,30 @@ func addTask(taskDescription string, ctx *TasksContext) {
 	fmt.Println("New Task saved")
 }
 
-
 func viewCurrentTasks() {
 	for _, t := range tasks {
 		fmt.Printf("%d. %s\n", t.id, t.description)
 	}
 }
 
-func loadCurrentTasks(currentTasksFile * os.File) {
+func getFile(fileName string) *os.File {
+	filePtr, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0664)
+	if err != nil {
+		fmt.Printf("Unable to open %s :: %s", fileName, err.Error())
+		os.Exit(-1)
+	}
+	return filePtr
+}
 
-
+func loadCurrentTasks(ctx *TasksContext) {
+	fileScanner := bufio.NewScanner(ctx.currentTasksFile)
+	fileScanner.Split(bufio.ScanLines)
+	for fileScanner.Scan() {
+		currentTaskId = currentTaskId + 1
+		tasks = append(tasks, &Task{
+			id:          currentTaskId,
+			description: fileScanner.Text(),
+		})
+	}
+	fmt.Println("Current tasks list loaded.")
 }
