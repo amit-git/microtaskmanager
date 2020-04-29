@@ -1,12 +1,14 @@
 # microtaskmanager
 A Lightweight command line tool for managing daily task list.
 
-> v <time range> : shows tasks filtered by time range
->> a "task description" - adds a new task
->> r {taskId} - removes task
->> d {taskId} - marks the task done
->> b {taskId} - puts the task in a backlog
->> w {taskId} - start work on the task, moves it out of backlog if needed
+## Following commands are supported
 
-> v now-2 : shows tasks finished in last 2 days
-> v backlog : shows tasks in backlog
+0. v <time range> : shows tasks filtered by time range
+1. a "task description" - adds a new task
+2. r {taskId} - removes task
+3. d {taskId} - marks the task done
+4. b {taskId} - puts the task in a backlog
+5. w {taskId} - start work on the task, moves it out of backlog if needed
+
+6. v now-2 : shows tasks finished in last 2 days
+7. v backlog : shows tasks in backlog
