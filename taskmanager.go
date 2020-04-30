@@ -1,11 +1,11 @@
 package main
 
 import (
-	"io/ioutil"
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
-	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,17 +18,19 @@ type TasksContext struct {
 }
 
 type Task struct {
-	id          uint8
+	id          int
 	description string
 }
 
 const TimeFormat = "01-02-2006"
 
 // global state
-var currentTaskId uint8 = 0
-var tasks = map[uint8]*Task{}
+var currentTaskId = 0
+var tasks = map[int]*Task{}
+var backlogTasks = make([]string, 0)
 var ctx *TasksContext
 var currentFilePathFull string
+var backlogFilePathFull string
 
 //var doneTasks map[*time.Time][]string
 
@@ -51,11 +53,12 @@ func main() {
 	}
 
 	currentFilePathFull = tasksFolder + "/current"
+	backlogFilePathFull = tasksFolder + "/backlog"
 
 	ctx = &TasksContext{
 		currentTasksFile:  getFile(currentFilePathFull),
 		finishedTasksFile: getFile(tasksFolder + "/done"),
-		backlogFile:       getFile(tasksFolder + "/backlog"),
+		backlogFile:       getFile(backlogFilePathFull),
 	}
 
 	loadCurrentTasks()
@@ -94,7 +97,7 @@ func processOption(cmd string) {
 	}
 
 	if strings.HasPrefix(cmd, "a ") {
-		addTask(strings.Replace(cmd, "a ", "", 1), ctx)
+		addTask(strings.Replace(cmd, "a ", "", 1))
 		return
 	}
 	if strings.HasPrefix(cmd, "v") {
@@ -108,32 +111,28 @@ func processOption(cmd string) {
 			fmt.Printf("Invalid taskId %s :: %s", cmd, err.Error())
 			return
 		}
-		if tasks[uint8(taskId)] == nil {
+		if tasks[taskId] == nil {
 			fmt.Println("Invalid taskId " + string(taskId))
 			return
 		}
-		markTaskDone(uint8(taskId))
+		markTaskDone(taskId)
 		return
 	}
 
 	fmt.Println("Default Processing :: " + cmd)
 }
 
-func addTask(taskDescription string, ctx *TasksContext) {
-	if _, err := ctx.currentTasksFile.WriteString(taskDescription + "\n"); err != nil {
-		fmt.Printf("Unable to write to %s :: %s\n", ctx.currentTasksFile.Name(), err.Error())
-		os.Exit(-1)
-	}
-
+func addTask(taskDescription string) {
 	currentTaskId = currentTaskId + 1
 	tasks[currentTaskId] = &Task{
 		id:          currentTaskId,
 		description: taskDescription,
 	}
-	fmt.Println("New Task saved")
+	saveCurrentTasks()
+	fmt.Printf("New Task with id %d saved\n", currentTaskId)
 }
 
-func markTaskDone(tid uint8) {
+func markTaskDone(tid int) {
 	currentTime := time.Now()
 	recordedTaskLine := fmt.Sprintf("%s\t%s\n", tasks[tid].description, currentTime.Format(TimeFormat))
 	if _, err := ctx.finishedTasksFile.WriteString(recordedTaskLine); err != nil {
@@ -146,9 +145,19 @@ func markTaskDone(tid uint8) {
 }
 
 func viewCurrentTasks() {
-	for _, t := range tasks {
-		fmt.Printf("%d. %s\n", t.id, t.description)
+	for _, tid := range getSortedTaskIds() {
+		fmt.Printf("%d. %s\n", tasks[tid].id, tasks[tid].description)
 	}
+}
+
+func getSortedTaskIds() []int {
+	taskIds := make([]int, 0, len(tasks))
+	for k := range tasks {
+		taskIds = append(taskIds, k)
+	}
+
+	sort.Ints(taskIds)
+	return taskIds
 }
 
 func getFile(fileName string) *os.File {
@@ -163,46 +172,42 @@ func getFile(fileName string) *os.File {
 func loadCurrentTasks() {
 	fileScanner := bufio.NewScanner(ctx.currentTasksFile)
 	fileScanner.Split(bufio.ScanLines)
-	var tempTaskId uint8 = 0
 	for fileScanner.Scan() {
-		tempTaskId = tempTaskId + 1
-		tasks[tempTaskId] = &Task{
-			id:          tempTaskId,
+		currentTaskId = currentTaskId + 1
+		tasks[currentTaskId] = &Task{
+			id:          currentTaskId,
 			description: fileScanner.Text(),
 		}
 	}
 	fmt.Println("Current tasks list loaded.")
 }
 
+func loadBacklog() {
+	fileScanner := bufio.NewScanner(ctx.backlogFile)
+	fileScanner.Split(bufio.ScanLines)
+	for fileScanner.Scan() {
+		backlogTasks = append(backlogTasks, fileScanner.Text())
+	}
+	fmt.Println("Backlog file loaded.")
+}
+
 func saveCurrentTasks() {
-	if err := ctx.currentTasksFile.Close(); err != nil {
-		fmt.Println("Error closing file system for current tasks file " + err.Error())
-		os.Exit(-1)
-	}
-
-	// reopen
-	ctx.currentTasksFile = getFile(currentFilePathFull)
-
-	/*
-	if _, err := ctx.currentTasksFile.Seek(0, 0); err != nil {
-		fmt.Printf("Unexpected error in accessing current tasks file %s :: %s", ctx.currentTasksFile.Name(), err.Error())
-		os.Exit(-1)
-	}
-	 */
-
-	var lines = make([]byte, len(tasks))
+	var lines string
 	for _, t := range tasks {
-		/*
-		if _, err := ctx.currentTasksFile.WriteString(t.description + "\n"); err != nil {
-			fmt.Printf("Unable to write to %s :: %s\n", ctx.currentTasksFile.Name(), err.Error())
-			os.Exit(-1)
-		}
-		 */
-		lines = reflect.AppendSlice(lines, []byte(fmt.Sprintf("%s\n",t.description)))
+		lines = lines + fmt.Sprintf("%s\n", t.description)
 	}
 
 	if err := ioutil.WriteFile(currentFilePathFull, []byte(lines), 0644); err != nil {
 		fmt.Println("Error writing file system for current tasks file " + err.Error())
 	}
+}
 
+func saveBacklog() {
+	var lines string
+	for _,t := range backlogTasks {
+		lines = lines + fmt.Sprintf("%s\n", t)
+	}
+	if err := ioutil.WriteFile(backlogFilePathFull, []byte(lines), 0644); err != nil {
+		fmt.Println("Error writing file system for backlog file " + err.Error())
+	}
 }
