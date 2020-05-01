@@ -372,6 +372,7 @@ func viewBacklog() {
 func viewDoneTasks(d time.Duration) {
 	mode = Done
 	threshold := time.Now().Add(d)
+	showTasksHeader()
 	for _, t := range doneTasks {
 		if t.finishedOn.After(threshold) {
 			fmt.Printf("%s : %s\n", t.finishedOn.Format(TimeFormat), t.description)
