@@ -86,19 +86,30 @@ func main() {
 	// first view is current list of tasks
 	viewCurrentTasks()
 	for {
-		cmd := getCmd()
+		cmd := readCmd()
 		processOption(cmd)
 	}
 }
 
-func getCmd() string {
+func readCmd() string {
+	fmt.Printf("\n> ")
+	reader := bufio.NewReader(os.Stdin)
+	cmd, e := reader.ReadString('\n')
+	if e != nil {
+		fmt.Println("Error in reading command " + e.Error())
+		os.Exit(-1)
+	}
+	return strings.Replace(cmd, "\n", "", -1)
+}
+
+func showHelp() string {
 	switch mode {
 	case Current:
-		return getCurrentModeOptions()
+		showCurrentModeOptions()
 	case Backlog:
-		return getBacklogModeOptions()
+		showBacklogModeOptions()
 	case Done:
-		return getFinishedModeOptions()
+		showDoneModeOptions()
 	default:
 		fmt.Println("Invalid Mode " + mode.String())
 		os.Exit(-1)
@@ -106,9 +117,9 @@ func getCmd() string {
 	return ""
 }
 
-func getCurrentModeOptions() string {
-	reader := bufio.NewReader(os.Stdin)
+func showCurrentModeOptions() {
 	fmt.Println("")
+	fmt.Println("vc : view current tasks")
 	fmt.Println("vb : view backlog tasks")
 	fmt.Println("vd now-Xd : view done tasks in past X days")
 	fmt.Println("a <txt> : adds a task ")
@@ -116,50 +127,33 @@ func getCurrentModeOptions() string {
 	fmt.Println("b <task-id> : puts a task in the backlog")
 	fmt.Println("d <task-id> : marks task DONE")
 	fmt.Println("q : Quit")
-	fmt.Printf("\n> ")
-	cmd, e := reader.ReadString('\n')
-	if e != nil {
-		fmt.Println("Error in reading command " + e.Error())
-		os.Exit(-1)
-	}
-	return strings.Replace(cmd, "\n", "", -1)
 }
 
-func getBacklogModeOptions() string {
-	reader := bufio.NewReader(os.Stdin)
+func showBacklogModeOptions() {
 	fmt.Println("")
 	fmt.Println("vc : view current tasks")
+	fmt.Println("vb : view backlog tasks")
 	fmt.Println("vd now-Xd : view done tasks in past X days")
 	fmt.Println("a <txt> : adds a task to backlog")
 	fmt.Println("w <task-id> : moves a task out of backlog into current list")
 	fmt.Println("r <task-id> : removes a task from the backlog")
 	fmt.Println("q : Quit")
-	fmt.Printf("\n> ")
-	cmd, e := reader.ReadString('\n')
-	if e != nil {
-		fmt.Println("Error in reading command " + e.Error())
-		os.Exit(-1)
-	}
-	return strings.Replace(cmd, "\n", "", -1)
 }
 
-func getFinishedModeOptions() string {
-	reader := bufio.NewReader(os.Stdin)
+func showDoneModeOptions() {
 	fmt.Println("")
 	fmt.Println("vb : view current backlog")
 	fmt.Println("vc : view current tasks")
 	fmt.Println("vd now-Xd : view done tasks in past X days")
 	fmt.Println("q : Quit")
-	fmt.Printf("\n> ")
-	cmd, e := reader.ReadString('\n')
-	if e != nil {
-		fmt.Println("Error in reading command " + e.Error())
-		os.Exit(-1)
-	}
-	return strings.Replace(cmd, "\n", "", -1)
 }
 
 func processOption(cmd string) {
+	if cmd == "h" {
+		showHelp()
+		return
+	}
+
 	if cmd == "q" {
 		fmt.Println("Ok. Bye")
 		_ = ctx.currentTasksFile.Close()
