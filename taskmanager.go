@@ -83,6 +83,8 @@ func main() {
 	loadBacklog()
 	loadDoneTasks()
 
+	// first view is current list of tasks
+	viewCurrentTasks()
 	for {
 		cmd := getCmd()
 		processOption(cmd)
@@ -107,7 +109,6 @@ func getCmd() string {
 func getCurrentModeOptions() string {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("")
-	fmt.Println("Pick one >")
 	fmt.Println("vb : view backlog tasks")
 	fmt.Println("vd now-Xd : view done tasks in past X days")
 	fmt.Println("a <txt> : adds a task ")
@@ -127,7 +128,6 @@ func getCurrentModeOptions() string {
 func getBacklogModeOptions() string {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("")
-	fmt.Println("Pick one >")
 	fmt.Println("vc : view current tasks")
 	fmt.Println("vd now-Xd : view done tasks in past X days")
 	fmt.Println("a <txt> : adds a task to backlog")
@@ -146,7 +146,6 @@ func getBacklogModeOptions() string {
 func getFinishedModeOptions() string {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("")
-	fmt.Println("Pick one >")
 	fmt.Println("vb : view current backlog")
 	fmt.Println("vc : view current tasks")
 	fmt.Println("vd now-Xd : view done tasks in past X days")
@@ -169,10 +168,7 @@ func processOption(cmd string) {
 		os.Exit(0)
 	}
 
-	if strings.HasPrefix(cmd, "a ") {
-		addTask(strings.Replace(cmd, "a ", "", 1))
-		return
-	}
+	// View Commands
 	if strings.HasPrefix(cmd, "vc") {
 		viewCurrentTasks()
 		return
@@ -201,9 +197,26 @@ func processOption(cmd string) {
 		}
 		duration := time.Duration(-daysNum) * 24 * time.Hour
 		viewDoneTasks(duration)
-
 	}
 
+	// Edit commands
+	if strings.HasPrefix(cmd, "a ") {
+		addTask(strings.Replace(cmd, "a ", "", 1))
+		return
+	}
+
+	if strings.HasPrefix(cmd, "r") {
+		taskIdStr := strings.Replace(cmd, "r", "", 1)
+		taskId, err := strconv.Atoi(taskIdStr)
+		if err != nil {
+			fmt.Printf("Invalid taskId %s :: %s", cmd, err.Error())
+			return
+		}
+		removeTask(taskId)
+		return
+	}
+
+	// Move commands
 	if strings.HasPrefix(cmd, "d") {
 		taskIdStr := strings.Replace(cmd, "d", "", 1)
 		taskId, err := strconv.Atoi(taskIdStr)
@@ -216,52 +229,165 @@ func processOption(cmd string) {
 			return
 		}
 		markTaskDone(taskId)
+		viewCurrentTasks()
 		return
 	}
 
-	fmt.Println("Default Processing :: " + cmd)
+	if strings.HasPrefix(cmd, "b") {
+		taskIdStr := strings.Replace(cmd, "b", "", 1)
+		taskId, err := strconv.Atoi(taskIdStr)
+		if err != nil {
+			fmt.Printf("Invalid taskId %s :: %s", cmd, err.Error())
+			return
+		}
+		if tasks[taskId] == nil {
+			fmt.Println("Invalid taskId " + string(taskId))
+			return
+		}
+		moveTaskToBacklog(taskId)
+		viewCurrentTasks()
+		return
+	}
+
+	if strings.HasPrefix(cmd, "w") {
+		taskIdStr := strings.Replace(cmd, "w", "", 1)
+		taskId, err := strconv.Atoi(taskIdStr)
+		if err != nil {
+			fmt.Printf("Invalid taskId %s :: %s", cmd, err.Error())
+			return
+		}
+		moveTaskToCurrent(taskId)
+		viewBacklog()
+		return
+	}
+}
+
+func moveTaskToCurrent(tid int) {
+	if backlogTasks[tid] != nil {
+		taskDescription := backlogTasks[tid].description
+		addTaskToCurrent(taskDescription)
+		saveCurrentTasks()
+		removeTaskFromBacklog(tid)
+		fmt.Printf("Task '%s' moved to current.\n", taskDescription)
+	} else {
+		fmt.Printf("Invalid taskId for backlog %d\n", tid)
+	}
+}
+
+func moveTaskToBacklog(tid int) {
+	backlogLatestTaskId = backlogLatestTaskId + 1
+	backlogTasks[backlogLatestTaskId] = &Task{
+		id:          backlogLatestTaskId,
+		description: tasks[tid].description,
+	}
+	delete(tasks, tid)
+	saveCurrentTasks()
+	saveBacklog()
+	fmt.Printf("Task '%s' moved to backlog.\n", backlogTasks[backlogLatestTaskId].description)
 }
 
 func addTask(taskDescription string) {
+	switch mode {
+	case Current:
+		addTaskToCurrent(taskDescription)
+		viewCurrentTasks()
+	case Backlog:
+		addTaskToBacklog(taskDescription)
+		viewBacklog()
+	case Done:
+		fmt.Printf("Invalid state for adding new tasks \n")
+	}
+}
+
+func removeTask(tid int) {
+	switch mode {
+	case Current:
+		removeTaskFromCurrent(tid)
+		viewCurrentTasks()
+	case Backlog:
+		removeTaskFromBacklog(tid)
+		viewBacklog()
+	case Done:
+		fmt.Printf("Invalid state for removing tasks \n")
+	}
+
+}
+
+func removeTaskFromBacklog(tid int) {
+	delete(backlogTasks, tid)
+	saveBacklog()
+	fmt.Printf("Removed\n")
+}
+
+func removeTaskFromCurrent(tid int) {
+	delete(tasks, tid)
+	saveCurrentTasks()
+	fmt.Printf("Removed\n")
+}
+
+func addTaskToCurrent(taskDescription string) {
 	curLatestTaskId = curLatestTaskId + 1
 	tasks[curLatestTaskId] = &Task{
 		id:          curLatestTaskId,
 		description: taskDescription,
 	}
 	saveCurrentTasks()
-	fmt.Printf("New Task with id %d saved\n", curLatestTaskId)
+	fmt.Printf("Saved\n")
+}
+
+func addTaskToBacklog(taskDescription string) {
+	backlogLatestTaskId = backlogLatestTaskId + 1
+	backlogTasks[backlogLatestTaskId] = &Task{
+		id:          backlogLatestTaskId,
+		description: taskDescription,
+	}
+	saveBacklog()
+	fmt.Printf("Saved\n")
 }
 
 func markTaskDone(tid int) {
 	currentTime := time.Now()
-	recordedTaskLine := fmt.Sprintf("%s\t%s\n", tasks[tid].description, currentTime.Format(TimeFormat))
-	if _, err := ctx.doneTasksFile.WriteString(recordedTaskLine); err != nil {
-		fmt.Printf("Unable to write to %s :: %s\n", ctx.doneTasksFile.Name(), err.Error())
-		os.Exit(-1)
-	}
-	fmt.Printf("Task '%s' DONE", tasks[tid].description)
+	doneTasks = append(doneTasks, &DoneTask{
+		description: tasks[tid].description,
+		finishedOn:  currentTime,
+	})
+	fmt.Printf("Task '%s' DONE\n", tasks[tid].description)
 	delete(tasks, tid)
 	saveCurrentTasks()
+	saveDoneTasks()
 }
 
 func viewCurrentTasks() {
-	for _, tid := range getSortedTaskIds() {
+	mode = Current
+	sortedTaskIds := getSortedTaskIds(tasks)
+	showTasksHeader()
+	for _, tid := range sortedTaskIds {
 		fmt.Printf("%d. %s\n", tasks[tid].id, tasks[tid].description)
 	}
 }
 
 func viewBacklog() {
-	fmt.Println("Showing backlog tasks ")
+	mode = Backlog
+	sortedTaskIds := getSortedTaskIds(backlogTasks)
+	showTasksHeader()
+	for _, tid := range sortedTaskIds {
+		fmt.Printf("%d. %s\n", backlogTasks[tid].id, backlogTasks[tid].description)
+	}
 }
 
 func viewDoneTasks(d time.Duration) {
+	mode = Done
 	threshold := time.Now().Add(d)
-	fmt.Println("Showing tasks finished after " + threshold.String())
+	for _, t := range doneTasks {
+		if t.finishedOn.After(threshold) {
+			fmt.Printf("%s : %s\n", t.finishedOn.Format(TimeFormat), t.description)
+		}
+	}
 }
 
-func getSortedTaskIds() []int {
-	taskIds := make([]int, 0, len(tasks))
-	for k := range tasks {
+func getSortedTaskIds(taskList map[int]*Task) []int {
+	taskIds := make([]int, 0, len(taskList))
+	for k := range taskList {
 		taskIds = append(taskIds, k)
 	}
 
@@ -331,6 +457,7 @@ func saveCurrentTasks() {
 
 	if err := ioutil.WriteFile(currentFilePathFull, []byte(lines), 0644); err != nil {
 		fmt.Println("Error writing file system for current tasks file " + err.Error())
+		os.Exit(-1)
 	}
 }
 
@@ -341,5 +468,22 @@ func saveBacklog() {
 	}
 	if err := ioutil.WriteFile(backlogFilePathFull, []byte(lines), 0644); err != nil {
 		fmt.Println("Error writing file system for backlog file " + err.Error())
+		os.Exit(-1)
 	}
+}
+
+func saveDoneTasks() {
+	var lines, recordedTaskLine string
+	for _, t := range doneTasks {
+		recordedTaskLine = fmt.Sprintf("%s\t%s\n", t.description, t.finishedOn.Format(TimeFormat))
+		lines = lines + recordedTaskLine
+	}
+	if err := ioutil.WriteFile(doneFilePathFull, []byte(lines), 0644); err != nil {
+		fmt.Println("Error writing file system for finished tasks file " + err.Error())
+		os.Exit(-1)
+	}
+}
+
+func showTasksHeader() {
+	fmt.Printf("\nTasks (%s)----------------------------------------\n", mode.String())
 }
