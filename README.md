@@ -17,6 +17,7 @@ Depending on each mode, the following commands are available
 0. a "task description" - adds a new task
 0. r {taskId} - removes task
 0. d {taskId} - marks the task done
+0. e {taskId} - edits the current task (Not implemented yet)
 0. b {taskId} - puts the task in a backlog
 0. q : quit
 0. h : show commands available in this mode
